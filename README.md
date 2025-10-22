@@ -174,5 +174,3 @@ Sistem cache terdistribusi yang menjaga konsistensi menggunakan protokol MESI da
 * **Kesalahan Klien:** Perhatikan pesan error dari server (misalnya `Not the leader`, `Wrong node`, `Invalid JSON`). Kirim perintah ke node yang benar dan pastikan format JSON sudah valid.
 
 ---
-
-*(Opsional: Tambahkan bagian Author/Informasi Mata Kuliah di sini)*
