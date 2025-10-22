@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  queue-node-1:
+    build:
+      context: ./queue-py # Path ke folder Dockerfile queue
+      dockerfile: Dockerfile
+    command: > # Perintah untuk node A
+      python main.py
+        --id="nodeA"
+        --addr="0.0.0.0:8000" # Listen di semua interface container
+        --peers="queue-node-1:8000,queue-node-2:8001,queue-node-3:8002" # Gunakan nama service
+        --dataDir="/data/nodeA" # Path di dalam container
+    ports:
+      - "8000:8000" # Map port host 8000 ke container 8000
+    volumes:
+      - ./queue-py/data/nodeA:/data/nodeA # Map folder data host ke container
+    networks:
+      - queue_net
+
+  queue-node-2:
+    build:
+      context: ./queue-py
+      dockerfile: Dockerfile
+    command: > # Perintah untuk node B
+      python main.py
+        --id="nodeB"
+        --addr="0.0.0.0:8001"
+        --peers="queue-node-1:8000,queue-node-2:8001,queue-node-3:8002"
+        --dataDir="/data/nodeB"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./queue-py/data/nodeB:/data/nodeB
+    networks:
+      - queue_net
+
+  queue-node-3:
+    build:
+      context: ./queue-py
+      dockerfile: Dockerfile
+    command: > # Perintah untuk node C
+      python main.py
+        --id="nodeC"
+        --addr="0.0.0.0:8002"
+        --peers="queue-node-1:8000,queue-node-2:8001,queue-node-3:8002"
+        --dataDir="/data/nodeC"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./queue-py/data/nodeC:/data/nodeC
+    networks:
+      - queue_net
+
+networks:
+  queue_net:
+    driver: bridge
+
+# Definisikan volume agar data tetap ada meskipun container dihapus (opsional tapi bagus)
+# volumes:
+#   queue_data_a:
+#   queue_data_b:
+#   queue_data_c:
