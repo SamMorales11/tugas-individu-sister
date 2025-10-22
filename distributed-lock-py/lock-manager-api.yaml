@@ -1,0 +1,256 @@
+openapi: 3.0.0
+info:
+  title: Distributed Lock Manager API (Python/Asyncio)
+  version: 1.0.0
+  description: API for acquiring, releasing, and checking the status of distributed locks managed by a simplified Raft cluster. Also includes internal Raft communication endpoints.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Node 1 API
+  - url: http://127.0.0.1:8001
+    description: Node 2 API
+  - url: http://127.0.0.1:8002
+    description: Node 3 API
+
+tags:
+  - name: Client API
+    description: Endpoints for clients interacting with the lock manager.
+  - name: Raft Internal
+    description: Endpoints used for communication between Raft nodes.
+
+paths:
+  /acquire:
+    post:
+      summary: Acquire a distributed lock
+      tags: [Client API]
+      description: Sends a request to acquire a lock. Must be sent to the leader node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lock_name:
+                  type: string
+                  description: The unique name of the lock.
+                  example: "kunci-py"
+                lock_type:
+                  type: string
+                  description: Type of lock (shared or exclusive).
+                  enum: [shared, exclusive]
+                  example: "exclusive"
+                client_id:
+                  type: string
+                  description: A unique identifier for the client.
+                  example: "user-py1"
+              required:
+                - lock_name
+                - lock_type
+                - client_id
+      responses:
+        '200':
+          description: Lock acquired successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "acquired" }
+                  message: { type: string, example: "Lock 'kunci-py' acquired by 'user-py1'" }
+        '202':
+          description: Request accepted, but the client must wait for the lock.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "waiting" }
+                  message: { type: string, example: "Request accepted, client 'user-py1' is waiting" }
+        '409':
+          description: Deadlock detected involving this request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "deadlock_detected" }
+                  message: { type: string, example: "Deadlock detected for 'kunci-py'" }
+        '400':
+          description: Invalid request format (e.g., missing fields).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '503':
+          description: The contacted node is not the leader or replication failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotLeaderResponse' }
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /release:
+    post:
+      summary: Release a distributed lock
+      tags: [Client API]
+      description: Sends a request to release a lock. Must be sent to the leader node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lock_name:
+                  type: string
+                  example: "kunci-py"
+                client_id:
+                  type: string
+                  example: "user-py1"
+              required:
+                - lock_name
+                - client_id
+      responses:
+        '200':
+          description: Lock released successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "released" }
+                  message: { type: string, example: "Lock 'kunci-py' released by 'user-py1'" }
+        '404':
+          description: Lock name not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "not_found" }
+                  message: { type: string, example: "Lock 'kunci-py' not found" }
+        '403':
+          description: Client does not hold the specified lock.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "not_holder" }
+                  message: { type: string, example: "Client 'user-py1' does not hold lock" }
+        '400':
+          description: Invalid request format.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '503':
+          description: The contacted node is not the leader.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotLeaderResponse' }
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /status:
+    get:
+      summary: Get internal status of the Raft node
+      tags: [Client API, Raft Internal]
+      description: Returns the current state, term, leader ID, and other diagnostic information about the specific node contacted.
+      responses:
+        '200':
+          description: Node status information.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id: { type: string, example: "127.0.0.1:7000" }
+                  state: { type: string, enum: [FOLLOWER, CANDIDATE, LEADER] }
+                  term: { type: integer, example: 2 }
+                  leader_id: { type: string, nullable: true, example: "127.0.0.1:7000" }
+                  commit_index: { type: integer, example: 1 }
+                  last_applied: { type: integer, example: 1 }
+                  log_length: { type: integer, example: 2 }
+
+  /request_vote:
+    post:
+      summary: Raft RequestVote RPC (Internal)
+      tags: [Raft Internal]
+      description: Internal endpoint used by candidates during leader election.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                term: { type: integer }
+                candidate_id: { type: string }
+                last_log_index: { type: integer }
+                last_log_term: { type: integer }
+      responses:
+        '200':
+          description: Response indicating whether the vote was granted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  term: { type: integer }
+                  vote_granted: { type: boolean }
+        '500':
+          description: Internal server error during processing.
+
+  /append_entries:
+    post:
+      summary: Raft AppendEntries RPC (Internal)
+      tags: [Raft Internal]
+      description: Internal endpoint used by the leader for log replication and heartbeats.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                term: { type: integer }
+                leader_id: { type: string }
+                prev_log_index: { type: integer }
+                prev_log_term: { type: integer }
+                entries:
+                  type: array
+                  items:
+                    type: object # Simplified Log Entry
+                leader_commit: { type: integer }
+      responses:
+        '200':
+          description: Response indicating if the entry was appended successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  term: { type: integer }
+                  success: { type: boolean }
+        '500':
+          description: Internal server error during processing.
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+      example:
+        error: "Missing required fields"
+    NotLeaderResponse:
+      type: object
+      properties:
+        error: { type: string, example: "Not the leader" }
+        leader_id: { type: string, nullable: true, example: "127.0.0.1:7001" }

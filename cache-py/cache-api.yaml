@@ -1,0 +1,170 @@
+openapi: 3.0.0
+info:
+  title: Distributed Cache Coherence API (Python/Asyncio/MESI)
+  version: 1.0.0
+  description: API for reading from and writing to a distributed cache using MESI protocol for coherence, LRU replacement, and metrics.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Cache Node A API
+  - url: http://127.0.0.1:8001
+    description: Cache Node B API
+  - url: http://127.0.0.1:8002
+    description: Cache Node C API
+
+tags:
+  - name: Client API
+    description: Endpoints for clients to interact with the cache.
+  - name: Internal API
+    description: Endpoints used for communication between cache nodes (invalidation).
+
+paths:
+  /read:
+    get:
+      summary: Read data from the cache
+      tags: [Client API]
+      description: Retrieves the value for a key. Handles cache misses by fetching/simulating from 'main memory' and updates LRU.
+      parameters:
+        - name: key
+          in: query
+          required: true
+          description: The key to read.
+          schema:
+            type: string
+            example: "ibukota"
+      responses:
+        '200':
+          description: Successfully retrieved the value.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  value: {} # Can be any type
+                example:
+                  key: "ibukota"
+                  value: "IKN Nusantara"
+        '404':
+          description: Key not found in cache or simulated main memory.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '400':
+          description: 'key' query parameter is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal server error.
+
+  /write:
+    post:
+      summary: Write data to the cache
+      tags: [Client API]
+      description: Writes or updates a key-value pair. Updates LRU, changes MESI state to Modified, updates simulated main memory, and broadcasts invalidation to peers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  example: "ibukota"
+                value: {} # Value can be any JSON type
+                  example: "Nusantara"
+              required:
+                - key
+                - value
+      responses:
+        '202':
+          description: Write request accepted. Data written and invalidation broadcast initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "accepted" }
+                  message: { type: string, example: "Write for key 'ibukota' accepted." }
+        '400':
+          description: Invalid request format (e.g., missing key/value or invalid JSON).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal server error.
+
+  /invalidate:
+    post:
+      summary: Invalidate a cache line (Internal)
+      tags: [Internal API]
+      description: Internal endpoint called by a peer to signal that the local cache line for the key is invalid. Changes state to Invalid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  example: "ibukota"
+              required:
+                - key
+      responses:
+        '200':
+          description: Cache line invalidated successfully or was already invalid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+        '400':
+          description: Invalid request format.
+        '500':
+          description: Internal server error.
+
+  /metrics:
+    get:
+      summary: Get cache performance metrics
+      tags: [Client API, Internal API]
+      description: Retrieves performance statistics for this cache node.
+      responses:
+        '200':
+          description: Cache performance metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id: { type: string }
+                  hits: { type: integer }
+                  misses: { type: integer }
+                  hit_rate_percent: { type: number, format: float }
+                  current_size: { type: integer }
+                  capacity: { type: integer }
+                  invalidations_sent: { type: integer }
+                  invalidations_received: { type: integer }
+                example:
+                  node_id: "nodeC"
+                  hits: 1
+                  misses: 6
+                  hit_rate_percent: 14.29
+                  current_size: 2
+                  capacity: 2
+                  invalidations_sent: 6
+                  invalidations_received: 0
+        '500':
+          description: Internal server error.
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+      example:
+        error: "'key' query parameter is required"

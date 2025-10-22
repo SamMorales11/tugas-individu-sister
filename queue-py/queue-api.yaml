@@ -1,0 +1,221 @@
+openapi: 3.0.0
+info:
+  title: Distributed Queue System API (Python/Asyncio)
+  version: 1.0.0
+  description: API for producing, consuming, and acknowledging messages in a distributed queue system using consistent hashing, with persistence and replication.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Node A API
+  - url: http://127.0.0.1:8001
+    description: Node B API
+  - url: http://127.0.0.1:8002
+    description: Node C API
+
+tags:
+  - name: Client API
+    description: Endpoints for producers and consumers.
+  - name: Internal API
+    description: Endpoints used for communication between queue nodes (replication).
+
+paths:
+  /produce:
+    post:
+      summary: Produce (send) a message to a queue
+      tags: [Client API]
+      description: Adds a message to the specified queue. If sent to the wrong node, it will be forwarded internally. The message is persisted and replicated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queue:
+                  type: string
+                  description: The name of the queue.
+                  example: "order-baru"
+                body:
+                  type: string
+                  description: The content of the message.
+                  example: "Proses Coto Makassar #789"
+              required:
+                - queue
+                - body
+      responses:
+        '201':
+          description: Message created, persisted, and replication initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "created" }
+                  message_id: { type: string, format: uuid }
+        '400':
+          description: Invalid request format (e.g., missing fields or invalid JSON).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Forwarding request to the correct node failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '503':
+          description: No nodes available in the ring or internal error during processing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '504':
+          description: Timeout during forwarding.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /consume:
+    get:
+      summary: Consume (receive) a message from a queue
+      tags: [Client API]
+      description: Retrieves the next available message from the specified queue. Automatically forwards if sent to the wrong node. Returns 404 if the queue is empty. Message moves to unacknowledged state.
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          description: The name of the queue to consume from.
+          schema:
+            type: string
+            example: "order-baru"
+      responses:
+        '200':
+          description: Successfully retrieved a message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: The queue is empty on the responsible node.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Queue 'order-baru' is empty" }
+        '400':
+          description: 'queue' query parameter is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Forwarding request to the correct node failed.
+        '503':
+          description: No nodes available in the ring.
+        '504':
+          description: Timeout during forwarding.
+        '500':
+          description: Internal server error.
+
+  /ack:
+    post:
+      summary: Acknowledge a processed message
+      tags: [Client API]
+      description: Confirms that a message retrieved via /consume has been processed. Must be sent to the node from which the message was consumed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message_id:
+                  type: string
+                  description: The unique ID of the message being acknowledged.
+                  format: uuid
+                  example: "b78efb90-b273-43b6-8187-146ba9bb5469"
+              required:
+                - message_id
+      responses:
+        '200':
+          description: Message acknowledged successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "acknowledged" }
+        '404':
+          description: The message ID was not found in the unacknowledged list on this node.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "Message ID not found or already acknowledged on this node" }
+        '400':
+          description: Invalid request format.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /replicate:
+    post:
+      summary: Replicate a message (Internal)
+      tags: [Internal API]
+      description: Internal endpoint called by the primary node to send a copy of a message to replica nodes. The replica persists the message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queue:
+                  type: string
+                msg:
+                  $ref: '#/components/schemas/Message' # Send the full message object
+              required:
+                - queue
+                - msg
+      responses:
+        '200':
+          description: Message replicated and persisted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "replicated" }
+        '400':
+          description: Invalid request body format.
+        '500':
+          description: Failed to store the replicated message.
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+      example:
+        error: "Missing 'queue' or 'body'"
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        body:
+          type: string
+      example:
+        id: "b78efb90-b273-43b6-8187-146ba9bb5469"
+        body: "Proses Coto Makassar #789"
