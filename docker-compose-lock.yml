@@ -1,27 +1,20 @@
-version: '3.8' # Versi Docker Compose
+version: '3.8'
 
 services:
-  # Definisi layanan untuk node Lock Manager
-  lock-node:
-    build:
-      context: ./distributed-lock-py # Path ke folder Dockerfile
-      dockerfile: Dockerfile
-    # Kita tidak bisa langsung menjalankan 3 node dari 1 service
-    # karena tiap node butuh ID dan port unik.
-    # Cara paling mudah adalah mendefinisikan tiap node secara eksplisit.
-
   lock-node-1:
     build:
       context: ./distributed-lock-py
       dockerfile: Dockerfile
-    command: > # Perintah untuk menjalankan node 1 di dalam container
+
+    command: >
       python main.py
-        --id="node1"
-        --raft_addr="lock-node-1:7000" # Gunakan nama service sebagai hostname
-        --http_addr="0.0.0.0:8000"     # Listen di semua interface
-        --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --id="node1"
+      --raft_addr="lock-node-1:7000"
+      --http_addr="0.0.0.0:8000"
+      --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --peer_http_addrs="lock-node-1:8000,lock-node-2:8001,lock-node-3:8002"
     ports:
-      - "8000:8000" # Map port container 8000 ke port host 8000
+      - "8000:8000"
     networks:
       - lock_net
 
@@ -31,10 +24,11 @@ services:
       dockerfile: Dockerfile
     command: >
       python main.py
-        --id="node2"
-        --raft_addr="lock-node-2:7000"
-        --http_addr="0.0.0.0:8001"
-        --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --id="node2"
+      --raft_addr="lock-node-2:7000"
+      --http_addr="0.0.0.0:8001"
+      --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --peer_http_addrs="lock-node-1:8000,lock-node-2:8001,lock-node-3:8002"
     ports:
       - "8001:8001"
     networks:
@@ -46,16 +40,16 @@ services:
       dockerfile: Dockerfile
     command: >
       python main.py
-        --id="node3"
-        --raft_addr="lock-node-3:7000"
-        --http_addr="0.0.0.0:8002"
-        --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --id="node3"
+      --raft_addr="lock-node-3:7000"
+      --http_addr="0.0.0.0:8002"
+      --peers="lock-node-1:7000,lock-node-2:7000,lock-node-3:7000"
+      --peer_http_addrs="lock-node-1:8000,lock-node-2:8001,lock-node-3:8002"
     ports:
       - "8002:8002"
     networks:
       - lock_net
 
-# Definisikan jaringan custom agar container bisa saling menemukan by name
 networks:
   lock_net:
     driver: bridge
