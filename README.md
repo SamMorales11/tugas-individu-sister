@@ -4,11 +4,12 @@ Repositori ini berisi implementasi tiga sistem terdistribusi fundamental sebagai
 
 ## 📚 Ringkasan Proyek
 
-Tugas ini terdiri dari tiga bagian utama:
+Tugas ini terdiri dari tiga bagian utama dan satu bagian bonus:
 
 1.  **Distributed Lock Manager (Raft):** Implementasi manajer kunci terdistribusi yang menggunakan algoritma konsensus Raft (versi disederhanakan) untuk memastikan hanya satu atau beberapa klien yang dapat mengakses sumber daya kritis pada satu waktu, dengan dukungan *shared* dan *exclusive lock* serta deteksi *deadlock*.
 2.  **Distributed Queue System (Consistent Hashing):** Implementasi sistem antrean pesan terdistribusi yang menggunakan *consistent hashing* untuk partisi data. Sistem ini mendukung *multiple producers/consumers*, *message persistence* ke disk, *recovery* saat startup, replikasi data sederhana, dan jaminan pengiriman *at-least-once* melalui mekanisme ACK.
 3.  **Distributed Cache Coherence (MESI):** Implementasi sistem cache terdistribusi yang menjaga konsistensi data antar node menggunakan protokol MESI. Sistem ini mendukung *multiple cache nodes*, menangani *cache invalidation* saat terjadi penulisan, menggunakan kebijakan penggantian LRU (Least Recently Used), dan menyediakan *performance monitoring*.
+4.  **(Bonus) Secure App (Security & Encryption):** Implementasi *key-value store* 2-node yang aman, menerapkan *Audit Logging*, RBAC (*Role-Based Access Control*), dan enkripsi komunikasi *end-to-end* antar node dan klien menggunakan HTTPS (TLS/SSL).
 
 ## 🛠️ Stack Teknologi
 
@@ -24,6 +25,7 @@ Repositori ini diorganisir ke dalam folder terpisah untuk setiap bagian tugas:
 * `distributed-lock-py/`: Berisi implementasi Distributed Lock Manager.
 * `queue-py/`: Berisi implementasi Distributed Queue System.
 * `cache-py/`: Berisi implementasi Distributed Cache Coherence.
+* `secure-app-py/`: Berisi implementasi Proyek Bonus Pilihan D.
 
 Setiap folder proyek berisi kode sumber (`.py`) dan file `requirements.txt` untuk dependensinya.
 
@@ -42,13 +44,13 @@ Manajer kunci terdistribusi berbasis Raft untuk koordinasi akses sumber daya.
 3.  Jalankan 3 node di **tiga terminal terpisah**:
     ```powershell
     # Terminal 1 (Node 1)
-    python main.py --id="node1" --raft_addr="127.0.0.1:7000" --http_addr="127.0.0.1:8000" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002"
+    python main.py --id="node1" --raft_addr="127.0.0.1:7000" --http_addr="127.0.0.1:8000" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002" --peer_http_addrs="127.0.0.1:8000,127.0.0.1:8001,127.0.0.1:8002"
 
     # Terminal 2 (Node 2)
-    python main.py --id="node2" --raft_addr="127.0.0.1:7001" --http_addr="127.0.0.1:8001" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002"
+    python main.py --id="node2" --raft_addr="127.0.0.1:7001" --http_addr="127.0.0.1:8001" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002" --peer_http_addrs="127.0.0.1:8000,127.0.0.1:8001,127.0.0.1:8002"
 
     # Terminal 3 (Node 3)
-    python main.py --id="node3" --raft_addr="127.0.0.1:7002" --http_addr="127.0.0.1:8002" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002"
+    python main.py --id="node3" --raft_addr="127.0.0.1:7002" --http_addr="127.0.0.1:8002" --peers="127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002" --peer_http_addrs="127.0.0.1:8000,127.0.0.1:8001,127.0.0.1:8002"
     ```
 4.  Tunggu beberapa saat hingga leader terpilih (terlihat dari log `WON election` dan `starting heartbeats`).
 
@@ -153,24 +155,70 @@ Sistem cache terdistribusi yang menjaga konsistensi menggunakan protokol MESI da
     Invoke-WebRequest -Uri [http://127.0.0.1:8000/write](http://127.0.0.1:8000/write) -Method POST -ContentType "application/json" -Body $dataUpdate
     ```
     *(Periksa log Node B, akan ada pesan invalidasi)*
-5.  **Read Lagi dari Node B (Miss lagi):**
+5.  **Cek Metrik:**
     ```powershell
-    Invoke-WebRequest -Uri "[http://127.0.0.1:8001/read?key=nama-kota](http://127.0.0.1:8001/read?key=nama-kota)" | ConvertFrom-Json
-    ```
-    *(Akan mengambil lagi dari simulasi memori, tapi nilai baru)*
-6.  **Cek Metrik:**
-    ```powershell
-    Invoke-WebRequest -Uri [http://127.0.0.1:8000/metrics](http://127.0.0.1:8000/metrics) | ConvertFrom-Json
     Invoke-WebRequest -Uri [http://127.0.0.1:8001/metrics](http://127.0.0.1:8001/metrics) | ConvertFrom-Json
     ```
+
+### **D. (Bonus) Secure App (Security & Encryption)**
+
+#### Deskripsi Singkat
+Implementasi *key-value store* 2-node yang aman dengan HTTPS, RBAC, dan Audit Log.
+
+#### Cara Menjalankan
+1.  Navigasi ke direktori `secure-app-py/`.
+2.  Instal dependensi: `pip install -r requirements.txt` (jika belum).
+3.  **Buat Sertifikat SSL (Hanya sekali):** Jika belum ada `server.key` dan `server.crt`, buat menggunakan **Git Bash**:
+    ```bash
+    openssl req -x509 -newkey rsa:4096 -nodes -keyout server.key -out server.crt -days 365
+    ```
+    *(Tekan Enter untuk semua pertanyaan)*
+4.  Jalankan 2 node di **dua terminal terpisah**:
+    ```powershell
+    # Terminal 1 (Node A - Primary)
+    python main.py --id="nodeA" --addr="127.0.0.1:8000" --replica="[https://127.0.0.1:8001](https://127.0.0.1:8001)"
+
+    # Terminal 2 (Node B - Replica)
+    python main.py --id="nodeB" --addr="127.0.0.1:8001"
+    ```
+
+#### Cara Menguji (Contoh di PowerShell menggunakan `curl.exe`)
+**Catatan:** Kita harus menggunakan `curl.exe -k` untuk mengabaikan *self-signed certificate*.
+
+1.  **Uji Gagal (Tanpa Token):**
+    ```powershell
+    curl.exe -k "[https://127.0.0.1:8000/get?key=kunci1](https://127.0.0.1:8000/get?key=kunci1)"
+    ```
+    *(Output diharapkan: `{"error":"Authorization token required or invalid"}`)*
+
+2.  **Uji Role "user" (Gagal Tulis):**
+    ```powershell
+    $dataUser = "{\"key\": \"kunci1\", \"value\": \"gagal\"}"
+    curl.exe -k -X POST -H "Authorization: Bearer token-user-ABC" -H "Content-Type: application/json" -d $dataUser "[https://127.0.0.1:8000/set](https://127.0.0.1:8000/set)"
+    ```
+    *(Output diharapkan: `{"error":"Insufficient permissions"}`)*
+
+3.  **Uji Role "admin" (Berhasil Tulis):**
+    ```powershell
+    $dataAdmin = "{\"key\": \"kunci1\", \"value\": \"berhasil\"}"
+    curl.exe -k -X POST -H "Authorization: Bearer token-admin-123" -H "Content-Type: application/json" -d $dataAdmin "[https://127.0.0.1:8000/set](https://127.0.0.1:8000/set)"
+    ```
+    *(Output diharapkan: `{"status":"ok","key":"kunci1","value":"berhasil"}`)*
+
+4.  **Verifikasi Replikasi (Baca dari Node B):**
+    ```powershell
+    curl.exe -k -H "Authorization: Bearer token-user-ABC" "[https://127.0.0.1:8001/get?key=kunci1](https://127.0.0.1:8001/get?key=kunci1)"
+    ```
+    *(Output diharapkan: `{"key":"kunci1","value":"berhasil"}`)*
 
 ---
 
 ## ⚠️ Catatan Penting & Troubleshooting
 
 * **Firewall/Antivirus:** Masalah paling umum saat menjalankan di lokal adalah `connection refused` karena Firewall (Windows Defender atau Antivirus pihak ketiga) memblokir komunikasi antar node. Pastikan untuk **mengizinkan akses** saat pop-up firewall muncul, atau tambahkan **pengecualian (exception)** secara manual untuk Python atau port yang digunakan (700x, 800x).
+* **HTTPS Error:** Saat menguji proyek *secure app* (Bonus D), pastikan menggunakan `https://` dan *flag* `-k` (untuk `curl.exe`) atau `-SkipCertificationCheck` (untuk `Invoke-WebRequest` jika didukung).
 * **Alamat IP:** Semua contoh menggunakan `127.0.0.1`. Jika Anda menjalankan antar komputer berbeda, ganti dengan alamat IP yang sesuai.
-* **Port:** Pastikan port yang digunakan (7000-7002, 8000-8002) tidak sedang dipakai oleh aplikasi lain.
+* **Port:** Pastikan port yang digunakan tidak sedang dipakai oleh aplikasi lain.
 * **Kesalahan Klien:** Perhatikan pesan error dari server (misalnya `Not the leader`, `Wrong node`, `Invalid JSON`). Kirim perintah ke node yang benar dan pastikan format JSON sudah valid.
 
 ---
