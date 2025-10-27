@@ -1,0 +1,218 @@
+openapi: 3.0.1
+info:
+  title: "API Sistem Sinkronisasi Terdistribusi"
+  description: "API untuk Distributed Lock Manager, Queue System, dan Cache Coherence."
+  version: "1.0.0"
+servers:
+  - url: "http://127.0.0.1:8000"
+    description: "Alamat Node 1 (Port dapat bervariasi)"
+  - url: "http://127.0.0.1:8001"
+    description: "Alamat Node 2 (Port dapat bervariasi)"
+  - url: "http://127.0.0.1:8002"
+    description: "Alamat Node 3 (Port dapat bervariasi)"
+
+paths:
+  /lock/acquire:
+    post:
+      summary: "Meminta untuk mendapatkan kunci (lock)"
+      tags: [LockManager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LockRequest"
+      responses:
+        '200':
+          description: "Kunci berhasil didapatkan"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockResponse"
+        '202':
+          description: "Permintaan diterima dan sedang menunggu"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockResponse"
+        '409':
+          description: "Konflik, deadlock terdeteksi"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '503':
+          description: "Bukan leader, klien harus mencoba node lain"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /lock/release:
+    post:
+      summary: "Melepaskan kunci (lock)"
+      tags: [LockManager]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseRequest"
+      responses:
+        '200':
+          description: "Kunci berhasil dilepaskan"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockResponse"
+        '403':
+          description: "Klien bukan pemegang kunci"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "Kunci tidak ditemukan"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /lock/status:
+    get:
+      summary: "Mendapatkan status node Raft saat ini"
+      tags: [LockManager]
+      responses:
+        '200':
+          description: "Status node"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id: { type: string }
+                  state: { type: string, enum: [LEADER, FOLLOWER, CANDIDATE] }
+                  term: { type: integer }
+                  leader_id: { type: string }
+  
+  /queue/enqueue:
+    post:
+      summary: "Menambahkan pesan baru ke antrean"
+      tags: [QueueSystem]
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema: { type: string }
+          description: "Nama antrean target"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageBody"
+      responses:
+        '201':
+          description: "Pesan berhasil ditambahkan"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        '307':
+          description: "Temporary Redirect ke node yang benar (Consistent Hashing)"
+
+  /queue/consume:
+    get:
+      summary: "Mengambil satu pesan dari antrean"
+      tags: [QueueSystem]
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema: { type: string }
+          description: "Nama antrean target"
+      responses:
+        '200':
+          description: "Pesan berhasil diambil"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        '204':
+          description: "Tidak ada pesan di antrean"
+        '307':
+          description: "Temporary Redirect ke node yang benar (Consistent Hashing)"
+          
+  /cache/{key}:
+    get:
+      summary: "Membaca nilai dari cache"
+      tags: [CacheCoherence]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: "Nilai ditemukan"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheEntry"
+        '404':
+          description: "Kunci tidak ditemukan"
+          
+    post:
+      summary: "Menulis nilai baru ke cache"
+      tags: [CacheCoherence]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CacheEntry"
+      responses:
+        '201':
+          description: "Nilai berhasil ditulis"
+
+components:
+  schemas:
+    LockRequest:
+      type: object
+      properties:
+        lock_name: { type: string, example: "kunci-utama" }
+        lock_type: { type: string, enum: [shared, exclusive], example: "exclusive" }
+        client_id: { type: string, example: "klien-01" }
+    ReleaseRequest:
+      type: object
+      properties:
+        lock_name: { type: string, example: "kunci-utama" }
+        client_id: { type: string, example: "klien-01" }
+    LockResponse:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        leader_id: { type: string, nullable: true }
+    MessageBody:
+      type: object
+      properties:
+        body: { type: string, example: "Isi pesan" }
+    MessageResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string }
+    CacheEntry:
+      type: object
+      properties:
+        value: { type: string, example: "data rahasia" }
