@@ -9,7 +9,7 @@ Tugas ini terdiri dari tiga bagian utama dan satu bagian bonus:
 1.  **Distributed Lock Manager (Raft):** Implementasi manajer kunci terdistribusi yang menggunakan algoritma konsensus Raft (versi disederhanakan) untuk memastikan hanya satu atau beberapa klien yang dapat mengakses sumber daya kritis pada satu waktu, dengan dukungan *shared* dan *exclusive lock* serta deteksi *deadlock*.
 2.  **Distributed Queue System (Consistent Hashing):** Implementasi sistem antrean pesan terdistribusi yang menggunakan *consistent hashing* untuk partisi data. Sistem ini mendukung *multiple producers/consumers*, *message persistence* ke disk, *recovery* saat startup, replikasi data sederhana, dan jaminan pengiriman *at-least-once* melalui mekanisme ACK.
 3.  **Distributed Cache Coherence (MESI):** Implementasi sistem cache terdistribusi yang menjaga konsistensi data antar node menggunakan protokol MESI. Sistem ini mendukung *multiple cache nodes*, menangani *cache invalidation* saat terjadi penulisan, menggunakan kebijakan penggantian LRU (Least Recently Used), dan menyediakan *performance monitoring*.
-4.  **(Bonus) Secure App (Security & Encryption):** Implementasi *key-value store* 2-node yang aman, menerapkan *Audit Logging*, RBAC (*Role-Based Access Control*), dan enkripsi komunikasi *end-to-end* antar node dan klien menggunakan HTTPS (TLS/SSL).
+4.  **(Bonus) Secure App (Security & Encryption):** Implementasi *key value store* 2 node yang aman, menerapkan *Audit Logging*, RBAC (*Role-Based Access Control*), dan enkripsi komunikasi *end to end* antar node dan klien menggunakan HTTPS (TLS/SSL).
 
 ## 🛠️ Stack Teknologi
 
